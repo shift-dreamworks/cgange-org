@@ -28,6 +28,7 @@ export function convertToReactFlow(
     data: {
       name: orgData.name,
       title: orgData.title,
+      level,
       onEdit,
       onDelete,
       onAdd,

@@ -27,6 +27,7 @@
 
 .dark .react-flow__edge-path {
   stroke: #6b7280;
+  stroke-width: 1.5;
 }
 
 .dark .react-flow__background {
