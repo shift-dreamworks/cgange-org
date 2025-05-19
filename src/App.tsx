@@ -27,7 +27,8 @@ import {
 import { ThemeProvider } from './components/ui/theme-provider'
 import { ThemeToggle } from './components/ui/theme-toggle'
 import { ChartManager } from './components/ChartManager'
-import { SearchFilter, FilterOptions } from './components/SearchFilter'
+import { SearchFilter, FilterOptions } from './components/SearchFilter.tsx'
+import { Button } from './components/ui/button'
 import { saveCurrentChart, loadCurrentChart } from './utils/localStorageUtils'
 
 const nodeTypes: NodeTypes = {
@@ -98,7 +99,6 @@ function App() {
     departments: [] 
   });
   const [availableDepartments, setAvailableDepartments] = useState<string[]>([]);
-  const [filteredOrgData, setFilteredOrgData] = useState<HierarchicalNode | null>(null);
 
   const handleAddNode = useCallback((parentId: string) => {
     const updatedOrgData = addNodeToHierarchy(orgData, parentId);
@@ -170,7 +170,6 @@ function App() {
       ? searchNodes(orgData, searchQuery, filterOptions)
       : orgData;
     
-    setFilteredOrgData(filtered);
     
     const { nodes: initialNodes, edges: initialEdges } = convertToReactFlow(
       filtered || orgData, // Use filtered data or fallback to original
