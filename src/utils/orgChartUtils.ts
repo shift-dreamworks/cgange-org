@@ -16,6 +16,30 @@ export function convertToReactFlow(
   x = 0,
   y = 0,
   level = 0,
+  searchQuery = '',
+  layout: 'vertical' | 'horizontal' | 'radial' | 'compact' = 'vertical'
+): { nodes: Node<OrgNodeData>[], edges: Edge[] } {
+  switch (layout) {
+    case 'horizontal':
+      return convertToHorizontalLayout(orgData, onEdit, onDelete, onAdd, x, y, level, searchQuery);
+    case 'radial':
+      return convertToRadialLayout(orgData, onEdit, onDelete, onAdd, x, y, level, searchQuery);
+    case 'compact':
+      return convertToCompactLayout(orgData, onEdit, onDelete, onAdd, x, y, level, searchQuery);
+    case 'vertical':
+    default:
+      return convertToVerticalLayout(orgData, onEdit, onDelete, onAdd, x, y, level, searchQuery);
+  }
+}
+
+function convertToVerticalLayout(
+  orgData: OrgNode,
+  onEdit: (id: string, name: string, title: string) => void,
+  onDelete: (id: string) => void,
+  onAdd: (parentId: string) => void,
+  x = 0,
+  y = 0,
+  level = 0,
   searchQuery = ''
 ): { nodes: Node<OrgNodeData>[], edges: Edge[] } {
   const nodes: Node<OrgNodeData>[] = [];
@@ -51,7 +75,7 @@ export function convertToReactFlow(
       const childX = startX + index * childSpacing;
       const childY = y + levelSpacing;
       
-      const childResult = convertToReactFlow(
+      const childResult = convertToVerticalLayout(
         child,
         onEdit,
         onDelete,
@@ -75,6 +99,240 @@ export function convertToReactFlow(
   }
   
   return { nodes, edges };
+}
+
+function convertToHorizontalLayout(
+  orgData: OrgNode,
+  onEdit: (id: string, name: string, title: string) => void,
+  onDelete: (id: string) => void,
+  onAdd: (parentId: string) => void,
+  x = 0,
+  y = 0,
+  level = 0,
+  searchQuery = ''
+): { nodes: Node<OrgNodeData>[], edges: Edge[] } {
+  const nodes: Node<OrgNodeData>[] = [];
+  const edges: Edge[] = [];
+  const childSpacing = 150; // Vertical spacing between siblings
+  const levelSpacing = 300; // Horizontal spacing between levels
+  
+  const currentNode: Node<OrgNodeData> = {
+    id: orgData.id,
+    position: { x, y },
+    data: {
+      name: orgData.name,
+      title: orgData.title,
+      level,
+      matchesSearch: searchQuery ? 
+        (orgData.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+         orgData.title.toLowerCase().includes(searchQuery.toLowerCase())) : 
+        false,
+      onEdit,
+      onDelete,
+      onAdd,
+    },
+    type: 'orgNode',
+  };
+  
+  nodes.push(currentNode);
+  
+  if (orgData.children && orgData.children.length > 0) {
+    const childrenHeight = (orgData.children.length - 1) * childSpacing;
+    let startY = y - childrenHeight / 2;
+    
+    orgData.children.forEach((child, index) => {
+      const childY = startY + index * childSpacing;
+      const childX = x + levelSpacing;
+      
+      const childResult = convertToHorizontalLayout(
+        child,
+        onEdit,
+        onDelete,
+        onAdd,
+        childX,
+        childY,
+        level + 1,
+        searchQuery
+      );
+      
+      edges.push({
+        id: `e-${orgData.id}-${child.id}`,
+        source: orgData.id,
+        target: child.id,
+        type: 'smoothstep',
+      });
+      
+      nodes.push(...childResult.nodes);
+      edges.push(...childResult.edges);
+    });
+  }
+  
+  return { nodes, edges };
+}
+
+function convertToRadialLayout(
+  orgData: OrgNode,
+  onEdit: (id: string, name: string, title: string) => void,
+  onDelete: (id: string) => void,
+  onAdd: (parentId: string) => void,
+  x = 0,
+  y = 0,
+  level = 0,
+  searchQuery = '',
+  angle = 0
+): { nodes: Node<OrgNodeData>[], edges: Edge[] } {
+  const nodes: Node<OrgNodeData>[] = [];
+  const edges: Edge[] = [];
+  
+  if (level === 0) {
+    x = 0;
+    y = 0;
+  }
+  
+  const levelRadius = level === 0 ? 0 : 200 * level; // Increase radius for each level
+  const currentNodeX = level === 0 ? x : x + levelRadius * Math.cos(angle);
+  const currentNodeY = level === 0 ? y : y + levelRadius * Math.sin(angle);
+  
+  const currentNode: Node<OrgNodeData> = {
+    id: orgData.id,
+    position: { x: currentNodeX, y: currentNodeY },
+    data: {
+      name: orgData.name,
+      title: orgData.title,
+      level,
+      matchesSearch: searchQuery ? 
+        (orgData.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+         orgData.title.toLowerCase().includes(searchQuery.toLowerCase())) : 
+        false,
+      onEdit,
+      onDelete,
+      onAdd,
+    },
+    type: 'orgNode',
+  };
+  
+  nodes.push(currentNode);
+  
+  if (orgData.children && orgData.children.length > 0) {
+    const numberOfChildren = orgData.children.length;
+    
+    let startAngle = level === 0 ? 0 : angle - Math.PI / 4;
+    let endAngle = level === 0 ? 2 * Math.PI : angle + Math.PI / 4;
+    let angleRange = endAngle - startAngle;
+    
+    orgData.children.forEach((child, index) => {
+      const childAngle = startAngle + (angleRange * index) / Math.max(1, numberOfChildren - 1);
+      
+      const childResult = convertToRadialLayout(
+        child,
+        onEdit,
+        onDelete,
+        onAdd,
+        currentNodeX,
+        currentNodeY,
+        level + 1,
+        searchQuery,
+        childAngle
+      );
+      
+      edges.push({
+        id: `e-${orgData.id}-${child.id}`,
+        source: orgData.id,
+        target: child.id,
+        type: 'smoothstep',
+      });
+      
+      nodes.push(...childResult.nodes);
+      edges.push(...childResult.edges);
+    });
+  }
+  
+  return { nodes, edges };
+}
+
+function convertToCompactLayout(
+  orgData: OrgNode,
+  onEdit: (id: string, name: string, title: string) => void,
+  onDelete: (id: string) => void,
+  onAdd: (parentId: string) => void,
+  x = 0,
+  y = 0,
+  level = 0,
+  searchQuery = ''
+): { nodes: Node<OrgNodeData>[], edges: Edge[] } {
+  const nodes: Node<OrgNodeData>[] = [];
+  const edges: Edge[] = [];
+  const childSpacing = 180; // Horizontal spacing between siblings
+  const levelSpacing = 100; // Vertical spacing between levels
+  
+  const currentNode: Node<OrgNodeData> = {
+    id: orgData.id,
+    position: { x, y },
+    data: {
+      name: orgData.name,
+      title: orgData.title,
+      level,
+      matchesSearch: searchQuery ? 
+        (orgData.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+         orgData.title.toLowerCase().includes(searchQuery.toLowerCase())) : 
+        false,
+      onEdit,
+      onDelete,
+      onAdd,
+    },
+    type: 'orgNode',
+  };
+  
+  nodes.push(currentNode);
+  
+  if (orgData.children && orgData.children.length > 0) {
+    const childrenInfo = orgData.children.map((child, index) => {
+      const subtreeSize = countSubtreeNodes(child);
+      return { index, subtreeSize, child };
+    });
+    
+    childrenInfo.sort((a, b) => b.subtreeSize - a.subtreeSize);
+    
+    const totalWidth = childrenInfo.reduce((acc, info) => acc + info.subtreeSize, 0) * childSpacing;
+    let startX = x - totalWidth / 2;
+    
+    childrenInfo.forEach(({ subtreeSize, child }) => {
+      const childX = startX + (subtreeSize * childSpacing) / 2;
+      const childY = y + levelSpacing;
+      
+      const childResult = convertToCompactLayout(
+        child,
+        onEdit,
+        onDelete,
+        onAdd,
+        childX,
+        childY,
+        level + 1,
+        searchQuery
+      );
+      
+      edges.push({
+        id: `e-${orgData.id}-${child.id}`,
+        source: orgData.id,
+        target: child.id,
+        type: 'smoothstep',
+      });
+      
+      nodes.push(...childResult.nodes);
+      edges.push(...childResult.edges);
+      
+      startX += subtreeSize * childSpacing;
+    });
+  }
+  
+  return { nodes, edges };
+}
+
+function countSubtreeNodes(node: OrgNode): number {
+  if (!node.children || node.children.length === 0) {
+    return 1;
+  }
+  return 1 + node.children.reduce((acc, child) => acc + countSubtreeNodes(child), 0);
 }
 
 export function generateId(): string {

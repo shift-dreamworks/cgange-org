@@ -28,8 +28,9 @@ import { ThemeProvider } from './components/ui/theme-provider'
 import { ThemeToggle } from './components/ui/theme-toggle'
 import { ChartManager } from './components/ChartManager'
 import { SearchFilter, FilterOptions } from './components/SearchFilter.tsx'
+import { LayoutSelector, LayoutType } from './components/ui/layout-selector'
 import { Button } from './components/ui/button'
-import { saveCurrentChart, loadCurrentChart } from './utils/localStorageUtils'
+import { saveCurrentChart, loadCurrentChart, saveLayoutPreference, loadLayoutPreference } from './utils/localStorageUtils'
 
 const nodeTypes: NodeTypes = {
   orgNode: OrgNode,
@@ -99,6 +100,8 @@ function App() {
     departments: [] 
   });
   const [availableDepartments, setAvailableDepartments] = useState<string[]>([]);
+  
+  const [layout, setLayout] = useState<LayoutType>(() => loadLayoutPreference());
 
   const handleAddNode = useCallback((parentId: string) => {
     const updatedOrgData = addNodeToHierarchy(orgData, parentId);
@@ -110,7 +113,12 @@ function App() {
       updatedOrgData,
       handleEditNode,
       handleDeleteNode,
-      handleAddNode
+      handleAddNode,
+      0, // x position
+      0, // y position
+      0, // level
+      '', // no search query
+      layout // current layout
     );
     
     setNodes(newNodes);
@@ -128,7 +136,12 @@ function App() {
         updatedOrgData,
         handleEditNode,
         handleDeleteNode,
-        handleAddNode
+        handleAddNode,
+        0, // x position
+        0, // y position
+        0, // level
+        '', // no search query
+        layout // current layout
       );
       
       setNodes(newNodes);
@@ -179,17 +192,23 @@ function App() {
       0, // x position
       0, // y position
       0, // level
-      searchQuery // Pass search query for highlighting
+      searchQuery, // Pass search query for highlighting
+      layout // Pass current layout
     );
     
     setNodes(initialNodes);
     setEdges(initialEdges);
-  }, [orgData, searchQuery, filterOptions, handleEditNode, handleDeleteNode, handleAddNode, setNodes, setEdges]);
+  }, [orgData, searchQuery, filterOptions, handleEditNode, handleDeleteNode, handleAddNode, layout, setNodes, setEdges]);
 
   const onNodeDragStop = useCallback((_event: React.MouseEvent, node: Node) => {
     console.log(`Node ${node.id} moved to position:`, node.position);
     saveCurrentChart(orgData); // Save after node position changes
   }, [orgData]);
+  
+  const handleLayoutChange = useCallback((newLayout: LayoutType) => {
+    setLayout(newLayout);
+    saveLayoutPreference(newLayout);
+  }, []);
 
   return (
     <ThemeProvider defaultTheme="light">
@@ -198,6 +217,7 @@ function App() {
           <h1 className="text-3xl font-bold text-center">組織図アプリ</h1>
           <div className="flex items-center space-x-2">
             <ChartManager currentChart={orgData} onLoadChart={setOrgData} />
+            <LayoutSelector currentLayout={layout} onLayoutChange={handleLayoutChange} />
             <ThemeToggle />
           </div>
         </div>

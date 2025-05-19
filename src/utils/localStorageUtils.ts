@@ -1,7 +1,9 @@
 import { OrgNode } from './orgChartUtils';
+import { LayoutType } from '../components/ui/layout-selector';
 
 const CURRENT_CHART_KEY = 'org-chart-current';
 const CHARTS_LIST_KEY = 'org-chart-list';
+const LAYOUT_PREFERENCE_KEY = 'org-chart-layout';
 
 export interface SavedChart {
   id: string;
@@ -130,4 +132,30 @@ export const importChart = (jsonString: string): OrgNode | null => {
     console.error('Failed to import chart:', error);
     return null;
   }
+};
+
+/**
+ * Save layout preference to localStorage
+ */
+export const saveLayoutPreference = (layout: LayoutType): void => {
+  try {
+    localStorage.setItem(LAYOUT_PREFERENCE_KEY, layout);
+  } catch (error) {
+    console.error('Failed to save layout preference:', error);
+  }
+};
+
+/**
+ * Load layout preference from localStorage
+ */
+export const loadLayoutPreference = (): LayoutType => {
+  try {
+    const savedLayout = localStorage.getItem(LAYOUT_PREFERENCE_KEY);
+    if (savedLayout && ['vertical', 'horizontal', 'radial', 'compact'].includes(savedLayout)) {
+      return savedLayout as LayoutType;
+    }
+  } catch (error) {
+    console.error('Failed to load layout preference:', error);
+  }
+  return 'vertical'; // Default layout
 };
