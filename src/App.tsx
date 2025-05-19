@@ -24,56 +24,65 @@ import {
 } from './utils/orgChartUtils'
 import { ThemeProvider } from './components/ui/theme-provider'
 import { ThemeToggle } from './components/ui/theme-toggle'
+import { ChartManager } from './components/ChartManager'
+import { saveCurrentChart, loadCurrentChart } from './utils/localStorageUtils'
 
 const nodeTypes: NodeTypes = {
   orgNode: OrgNode,
 }
 
 function App() {
-  const [orgData, setOrgData] = useState<HierarchicalNode>({
-    id: '1',
-    name: '山田太郎',
-    title: '代表取締役社長',
-    children: [
-      {
-        id: '2',
-        name: '佐藤一郎',
-        title: '営業部長',
-        children: [
-          {
-            id: '4',
-            name: '高橋花子',
-            title: '営業マネージャー',
-            children: []
-          },
-          {
-            id: '5',
-            name: '鈴木健太',
-            title: '営業担当',
-            children: []
-          }
-        ]
-      },
-      {
-        id: '3',
-        name: '田中次郎',
-        title: '技術部長',
-        children: [
-          {
-            id: '6',
-            name: '伊藤誠',
-            title: '開発リーダー',
-            children: []
-          },
-          {
-            id: '7',
-            name: '渡辺真理',
-            title: 'デザイナー',
-            children: []
-          }
-        ]
-      }
-    ]
+  const [orgData, setOrgData] = useState<HierarchicalNode>(() => {
+    const savedData = loadCurrentChart();
+    if (savedData) {
+      return savedData;
+    }
+    
+    return {
+      id: '1',
+      name: '山田太郎',
+      title: '代表取締役社長',
+      children: [
+        {
+          id: '2',
+          name: '佐藤一郎',
+          title: '営業部長',
+          children: [
+            {
+              id: '4',
+              name: '高橋花子',
+              title: '営業マネージャー',
+              children: []
+            },
+            {
+              id: '5',
+              name: '鈴木健太',
+              title: '営業担当',
+              children: []
+            }
+          ]
+        },
+        {
+          id: '3',
+          name: '田中次郎',
+          title: '技術部長',
+          children: [
+            {
+              id: '6',
+              name: '伊藤誠',
+              title: '開発リーダー',
+              children: []
+            },
+            {
+              id: '7',
+              name: '渡辺真理',
+              title: 'デザイナー',
+              children: []
+            }
+          ]
+        }
+      ]
+    };
   });
 
   const [nodes, setNodes, onNodesChange] = useNodesState<OrgNodeData>([]);
@@ -83,6 +92,8 @@ function App() {
   const handleAddNode = useCallback((parentId: string) => {
     const updatedOrgData = addNodeToHierarchy(orgData, parentId);
     setOrgData(updatedOrgData);
+    
+    saveCurrentChart(updatedOrgData);
     
     const { nodes: newNodes, edges: newEdges } = convertToReactFlow(
       updatedOrgData,
@@ -100,6 +111,8 @@ function App() {
     if (updatedOrgData) {
       setOrgData(updatedOrgData);
       
+      saveCurrentChart(updatedOrgData);
+      
       const { nodes: newNodes, edges: newEdges } = convertToReactFlow(
         updatedOrgData,
         handleEditNode,
@@ -115,6 +128,8 @@ function App() {
   const handleEditNode = useCallback((nodeId: string, name: string, title: string) => {
     const updatedOrgData = updateNodeInHierarchy(orgData, nodeId, name, title);
     setOrgData(updatedOrgData);
+    
+    saveCurrentChart(updatedOrgData);
     
     setNodes(nodes => nodes.map(node => {
       if (node.id === nodeId) {
@@ -150,14 +165,18 @@ function App() {
 
   const onNodeDragStop = useCallback((_event: React.MouseEvent, node: Node) => {
     console.log(`Node ${node.id} moved to position:`, node.position);
-  }, []);
+    saveCurrentChart(orgData); // Save after node position changes
+  }, [orgData]);
 
   return (
     <ThemeProvider defaultTheme="light">
       <div className="container mx-auto p-4">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-center">組織図アプリ</h1>
-          <ThemeToggle />
+          <div className="flex items-center space-x-2">
+            <ChartManager currentChart={orgData} onLoadChart={setOrgData} />
+            <ThemeToggle />
+          </div>
         </div>
         
         <Card className="mb-6">
