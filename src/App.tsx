@@ -6,11 +6,14 @@ import ReactFlow, {
   Background,
   useNodesState,
   useEdgesState,
-  addEdge,
+  // addEdge,
   NodeTypes,
   OnConnect,
   Node,
-  ReactFlowProvider
+  ReactFlowProvider,
+  useOnSelectionChange,
+  Panel,
+  Connection
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card'
@@ -22,7 +25,9 @@ import {
   deleteNodeFromHierarchy,
   updateNodeInHierarchy,
   searchNodes,
-  getAllDepartments
+  getAllDepartments,
+  bulkUpdateTitlesInHierarchy,
+  changeNodeParentInHierarchy
 } from './utils/orgChartUtils'
 import { ThemeProvider } from './components/ui/theme-provider'
 import { ThemeToggle } from './components/ui/theme-toggle'
@@ -31,12 +36,24 @@ import { SearchFilter, FilterOptions } from './components/SearchFilter.tsx'
 import { LayoutSelector, LayoutType } from './components/ui/layout-selector'
 import { Button } from './components/ui/button'
 import { saveCurrentChart, loadCurrentChart, saveLayoutPreference, loadLayoutPreference } from './utils/localStorageUtils'
+import { BulkEditDialog } from './components/BulkEditDialog'
+import { HistoryControls } from './components/HistoryControls'
+import { SelectionControls } from './components/SelectionControls'
+import {
+  HistoryState,
+  createHistoryState,
+  recordChange,
+  undo,
+  redo,
+  canUndo,
+  canRedo
+} from './utils/historyUtils'
 
 const nodeTypes: NodeTypes = {
   orgNode: OrgNode,
 }
 
-function App() {
+function AppContent() {
   const [orgData, setOrgData] = useState<HierarchicalNode>(() => {
     const savedData = loadCurrentChart();
     if (savedData) {
@@ -102,18 +119,48 @@ function App() {
   const [availableDepartments, setAvailableDepartments] = useState<string[]>([]);
   
   const [layout, setLayout] = useState<LayoutType>(() => loadLayoutPreference());
+  
+  const [historyState, setHistoryState] = useState<HistoryState>(() => 
+    createHistoryState(orgData)
+  );
+  
+  const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
+  
+  const [showBulkEditDialog, setShowBulkEditDialog] = useState(false);
 
+  const handleUndo = useCallback(() => {
+    if (!canUndo(historyState)) return;
+    const newState = undo(historyState);
+    setHistoryState(newState);
+    setOrgData(newState.present);
+  }, [historyState]);
+
+  const handleRedo = useCallback(() => {
+    if (!canRedo(historyState)) return;
+    const newState = redo(historyState);
+    setHistoryState(newState);
+    setOrgData(newState.present);
+  }, [historyState]);
+
+  const recordToHistory = useCallback((newData: HierarchicalNode) => {
+    setHistoryState(current => recordChange(current, newData));
+    setOrgData(newData);
+    saveCurrentChart(newData);
+  }, []);
+
+  const handleNodeEdit = useCallback((_nodeId: string, _name: string, _title: string) => {}, []);
+  const handleNodeDelete = useCallback((_nodeId: string) => {}, []);
+  const handleNodeAdd = useCallback((_parentId: string) => {}, []);
+  
   const handleAddNode = useCallback((parentId: string) => {
     const updatedOrgData = addNodeToHierarchy(orgData, parentId);
-    setOrgData(updatedOrgData);
-    
-    saveCurrentChart(updatedOrgData);
+    recordToHistory(updatedOrgData);
     
     const { nodes: newNodes, edges: newEdges } = convertToReactFlow(
       updatedOrgData,
-      handleEditNode,
-      handleDeleteNode,
-      handleAddNode,
+      handleNodeEdit,
+      handleNodeDelete,
+      handleNodeAdd,
       0, // x position
       0, // y position
       0, // level
@@ -123,20 +170,18 @@ function App() {
     
     setNodes(newNodes);
     setEdges(newEdges);
-  }, [orgData, setNodes, setEdges]);
+  }, [orgData, recordToHistory, layout, setNodes, setEdges]);
 
   const handleDeleteNode = useCallback((nodeId: string) => {
     const updatedOrgData = deleteNodeFromHierarchy(orgData, nodeId);
     if (updatedOrgData) {
-      setOrgData(updatedOrgData);
-      
-      saveCurrentChart(updatedOrgData);
+      recordToHistory(updatedOrgData);
       
       const { nodes: newNodes, edges: newEdges } = convertToReactFlow(
         updatedOrgData,
-        handleEditNode,
-        handleDeleteNode,
-        handleAddNode,
+        handleNodeEdit,
+        handleNodeDelete,
+        handleNodeAdd,
         0, // x position
         0, // y position
         0, // level
@@ -147,13 +192,11 @@ function App() {
       setNodes(newNodes);
       setEdges(newEdges);
     }
-  }, [orgData, setNodes, setEdges]);
+  }, [orgData, recordToHistory, layout, setNodes, setEdges]);
 
   const handleEditNode = useCallback((nodeId: string, name: string, title: string) => {
     const updatedOrgData = updateNodeInHierarchy(orgData, nodeId, name, title);
-    setOrgData(updatedOrgData);
-    
-    saveCurrentChart(updatedOrgData);
+    recordToHistory(updatedOrgData);
     
     setNodes(nodes => nodes.map(node => {
       if (node.id === nodeId) {
@@ -168,12 +211,38 @@ function App() {
       }
       return node;
     }));
-  }, [orgData, setNodes]);
+  }, [orgData, recordToHistory, setNodes]);
 
-  const onConnect: OnConnect = useCallback(
-    (params) => setEdges((eds) => addEdge({ ...params, type: 'smoothstep' }, eds)),
-    [setEdges]
-  );
+  const handleBulkEdit = useCallback((newTitle: string) => {
+    if (selectedNodes.length === 0) return;
+    const updatedOrgData = bulkUpdateTitlesInHierarchy(orgData, selectedNodes, newTitle);
+    recordToHistory(updatedOrgData);
+  }, [orgData, selectedNodes, recordToHistory]);
+
+  const handleBulkDelete = useCallback(() => {
+    if (selectedNodes.length === 0) return;
+    let updatedOrgData = orgData;
+    for (const nodeId of selectedNodes) {
+      const result = deleteNodeFromHierarchy(updatedOrgData, nodeId);
+      if (result) updatedOrgData = result;
+    }
+    recordToHistory(updatedOrgData);
+    setSelectedNodes([]);
+  }, [orgData, selectedNodes, recordToHistory]);
+
+  useOnSelectionChange({
+    onChange: ({ nodes }) => {
+      setSelectedNodes(nodes.map(node => node.id));
+    },
+  });
+
+  const onConnect: OnConnect = useCallback((connection: Connection) => {
+    const { source, target } = connection;
+    if (source && target) {
+      const updatedOrgData = changeNodeParentInHierarchy(orgData, target, source);
+      recordToHistory(updatedOrgData);
+    }
+  }, [orgData, recordToHistory]);
 
   useEffect(() => {
     const departments = getAllDepartments(orgData);
@@ -196,9 +265,17 @@ function App() {
       layout // Pass current layout
     );
     
-    setNodes(initialNodes);
+    const nodesWithSelection = initialNodes.map(node => ({
+      ...node,
+      data: {
+        ...node.data,
+        isSelected: selectedNodes.includes(node.id),
+      },
+    }));
+    
+    setNodes(nodesWithSelection);
     setEdges(initialEdges);
-  }, [orgData, searchQuery, filterOptions, handleEditNode, handleDeleteNode, handleAddNode, layout, setNodes, setEdges]);
+  }, [orgData, searchQuery, filterOptions, handleEditNode, handleDeleteNode, handleAddNode, layout, selectedNodes, setNodes, setEdges]);
 
   const onNodeDragStop = useCallback((_event: React.MouseEvent, node: Node) => {
     console.log(`Node ${node.id} moved to position:`, node.position);
@@ -214,7 +291,15 @@ function App() {
     <ThemeProvider defaultTheme="light">
       <div className="container mx-auto p-4">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-center">組織図アプリ</h1>
+          <div className="flex items-center space-x-4">
+            <h1 className="text-3xl font-bold">組織図アプリ</h1>
+            <HistoryControls
+              canUndo={canUndo(historyState)}
+              canRedo={canRedo(historyState)}
+              onUndo={handleUndo}
+              onRedo={handleRedo}
+            />
+          </div>
           <div className="flex items-center space-x-2">
             <ChartManager currentChart={orgData} onLoadChart={setOrgData} />
             <LayoutSelector currentLayout={layout} onLayoutChange={handleLayoutChange} />
@@ -234,8 +319,7 @@ function App() {
               onFilterChange={setFilterOptions}
               availableDepartments={availableDepartments}
             />
-            <div ref={reactFlowWrapper} className="w-full h-[550px]">
-              <ReactFlowProvider>
+            <div ref={reactFlowWrapper} className="w-full h-[550px] relative">
                 <ReactFlow
                   nodes={nodes}
                   edges={edges}
@@ -246,10 +330,19 @@ function App() {
                   nodeTypes={nodeTypes}
                   fitView
                   attributionPosition="bottom-right"
+                  multiSelectionKeyCode="Shift"
                 >
                   <Controls />
                   <MiniMap />
                   <Background />
+                  <Panel position="top-center">
+                    <SelectionControls
+                      selectedCount={selectedNodes.length}
+                      onBulkEdit={() => setShowBulkEditDialog(true)}
+                      onBulkDelete={handleBulkDelete}
+                      onClearSelection={() => setSelectedNodes([])}
+                    />
+                  </Panel>
                 </ReactFlow>
                 {nodes.length === 0 && (searchQuery || filterOptions.levels.length > 0 || filterOptions.departments.length > 0) && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-zinc-900/80 z-10">
@@ -270,7 +363,6 @@ function App() {
                     </Card>
                   </div>
                 )}
-              </ReactFlowProvider>
             </div>
           </CardContent>
         </Card>
@@ -279,11 +371,28 @@ function App() {
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
             このアプリは組織図を表示・編集するためのReactアプリケーションです。
             ノードをドラッグして移動したり、ノードの上にホバーして編集・削除・追加ボタンを表示することができます。
+            複数のノードを選択するには、Shiftキーを押しながらノードをクリックしてください。
           </p>
         </div>
+        
+        {/* Bulk Edit Dialog */}
+        <BulkEditDialog
+          isOpen={showBulkEditDialog}
+          onClose={() => setShowBulkEditDialog(false)}
+          onSave={handleBulkEdit}
+          selectedCount={selectedNodes.length}
+        />
       </div>
     </ThemeProvider>
   )
+}
+
+function App() {
+  return (
+    <ReactFlowProvider>
+      <AppContent />
+    </ReactFlowProvider>
+  );
 }
 
 export default App

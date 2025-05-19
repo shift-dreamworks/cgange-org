@@ -11,6 +11,7 @@ export interface OrgNodeData {
   level?: number;
   isEditing?: boolean;
   matchesSearch?: boolean;
+  isSelected?: boolean;
   onDelete?: (id: string) => void;
   onAdd?: (parentId: string) => void;
   onEdit?: (id: string, name: string, title: string) => void;
@@ -82,7 +83,9 @@ const OrgNode = ({ id, data }: NodeProps<OrgNodeData>) => {
       <Card 
         className={`min-w-[220px] p-3 shadow-lg transition-all duration-200 
                   hover:shadow-xl border-2 
-                  ${data.matchesSearch ? 'border-amber-400 dark:border-amber-500 ring-2 ring-amber-300 dark:ring-amber-600' : 'border-zinc-100 dark:border-zinc-800'}
+                  ${data.matchesSearch ? 'border-amber-400 dark:border-amber-500 ring-2 ring-amber-300 dark:ring-amber-600' : 
+                    data.isSelected ? 'border-blue-500 dark:border-blue-400 ring-2 ring-blue-300 dark:ring-blue-600' : 
+                    'border-zinc-100 dark:border-zinc-800'}
                   ${getBgGradientClass(data.level ?? 0)}`}
       >
         {editMode ? (

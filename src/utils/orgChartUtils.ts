@@ -507,3 +507,116 @@ export function searchNodes(
   identifyMatches(result);
   return filterTree(result);
 }
+
+export function bulkUpdateTitlesInHierarchy(
+  orgData: OrgNode,
+  nodeIds: string[],
+  newTitle: string
+): OrgNode {
+  if (nodeIds.length === 0) return orgData;
+
+  let updatedData = { ...orgData };
+  
+  function updateNodeTitles(node: OrgNode): OrgNode {
+    if (nodeIds.includes(node.id)) {
+      return {
+        ...node,
+        title: newTitle,
+        children: node.children?.map(updateNodeTitles)
+      };
+    }
+
+    return {
+      ...node,
+      children: node.children?.map(updateNodeTitles)
+    };
+  }
+
+  return updateNodeTitles(updatedData);
+}
+
+export function changeNodeParentInHierarchy(
+  orgData: OrgNode,
+  nodeId: string,
+  newParentId: string
+): OrgNode {
+  if (isDescendant(orgData, newParentId, nodeId)) {
+    return orgData;
+  }
+
+  const nodeToMove = findNodeById(orgData, nodeId);
+  if (!nodeToMove) return orgData;
+  
+  const orgDataWithoutNode = deleteNodeFromHierarchy(orgData, nodeId);
+  if (!orgDataWithoutNode) return orgData;
+  
+  return addExistingNodeToHierarchy(orgDataWithoutNode, newParentId, nodeToMove);
+}
+
+function isDescendant(orgData: OrgNode, potentialDescendant: string, nodeId: string): boolean {
+  if (potentialDescendant === nodeId) return true;
+  
+  if (orgData.id === nodeId && orgData.children) {
+    return !!orgData.children.find(child => isDescendant(child, potentialDescendant, child.id));
+  }
+  
+  if (orgData.children) {
+    return !!orgData.children.find(child => isDescendant(child, potentialDescendant, nodeId));
+  }
+  
+  return false;
+}
+
+export function findNodeById(orgData: OrgNode, nodeId: string): OrgNode | null {
+  if (orgData.id === nodeId) {
+    return orgData;
+  }
+  
+  if (orgData.children) {
+    for (const child of orgData.children) {
+      const found = findNodeById(child, nodeId);
+      if (found) return found;
+    }
+  }
+  
+  return null;
+}
+
+function addExistingNodeToHierarchy(
+  orgData: OrgNode,
+  parentId: string,
+  nodeToAdd: OrgNode
+): OrgNode {
+  if (orgData.id === parentId) {
+    return {
+      ...orgData,
+      children: [...(orgData.children || []), nodeToAdd],
+    };
+  }
+  
+  if (orgData.children && orgData.children.length > 0) {
+    return {
+      ...orgData,
+      children: orgData.children.map(child => 
+        addExistingNodeToHierarchy(child, parentId, nodeToAdd)
+      ),
+    };
+  }
+  
+  return orgData;
+}
+
+export function findParentNode(orgData: OrgNode, nodeId: string): OrgNode | null {
+  if (orgData.children && orgData.children.some(child => child.id === nodeId)) {
+    return orgData;
+  }
+  
+  if (orgData.children) {
+    for (const child of orgData.children) {
+      const parent = findParentNode(child, nodeId);
+      if (parent) return parent;
+    }
+  }
+  
+  return null;
+}
