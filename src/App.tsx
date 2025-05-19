@@ -22,6 +22,8 @@ import {
   deleteNodeFromHierarchy,
   updateNodeInHierarchy
 } from './utils/orgChartUtils'
+import { ThemeProvider } from './components/ui/theme-provider'
+import { ThemeToggle } from './components/ui/theme-toggle'
 
 const nodeTypes: NodeTypes = {
   orgNode: OrgNode,
@@ -151,43 +153,48 @@ function App() {
   }, []);
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold mb-6 text-center">組織図アプリ</h1>
-      
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>組織図</CardTitle>
-        </CardHeader>
-        <CardContent className="h-[600px]">
-          <div ref={reactFlowWrapper} className="w-full h-full">
-            <ReactFlowProvider>
-              <ReactFlow
-                nodes={nodes}
-                edges={edges}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                onConnect={onConnect}
-                onNodeDragStop={onNodeDragStop}
-                nodeTypes={nodeTypes}
-                fitView
-                attributionPosition="bottom-right"
-              >
-                <Controls />
-                <MiniMap />
-                <Background />
-              </ReactFlow>
-            </ReactFlowProvider>
-          </div>
-        </CardContent>
-      </Card>
-      
-      <div className="text-center">
-        <p className="text-sm text-gray-500 mb-4">
-          このアプリは組織図を表示・編集するためのReactアプリケーションです。
-          ノードをドラッグして移動したり、ノードの上にホバーして編集・削除・追加ボタンを表示することができます。
-        </p>
+    <ThemeProvider defaultTheme="light">
+      <div className="container mx-auto p-4">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold text-center">組織図アプリ</h1>
+          <ThemeToggle />
+        </div>
+        
+        <Card className="mb-6">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>組織図</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[600px]">
+            <div ref={reactFlowWrapper} className="w-full h-full">
+              <ReactFlowProvider>
+                <ReactFlow
+                  nodes={nodes}
+                  edges={edges}
+                  onNodesChange={onNodesChange}
+                  onEdgesChange={onEdgesChange}
+                  onConnect={onConnect}
+                  onNodeDragStop={onNodeDragStop}
+                  nodeTypes={nodeTypes}
+                  fitView
+                  attributionPosition="bottom-right"
+                >
+                  <Controls />
+                  <MiniMap />
+                  <Background />
+                </ReactFlow>
+              </ReactFlowProvider>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <div className="text-center">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+            このアプリは組織図を表示・編集するためのReactアプリケーションです。
+            ノードをドラッグして移動したり、ノードの上にホバーして編集・削除・追加ボタンを表示することができます。
+          </p>
+        </div>
       </div>
-    </div>
+    </ThemeProvider>
   )
 }
 
