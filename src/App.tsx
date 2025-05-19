@@ -20,11 +20,14 @@ import {
   convertToReactFlow,
   addNodeToHierarchy,
   deleteNodeFromHierarchy,
-  updateNodeInHierarchy
+  updateNodeInHierarchy,
+  searchNodes,
+  getAllDepartments
 } from './utils/orgChartUtils'
 import { ThemeProvider } from './components/ui/theme-provider'
 import { ThemeToggle } from './components/ui/theme-toggle'
 import { ChartManager } from './components/ChartManager'
+import { SearchFilter, FilterOptions } from './components/SearchFilter'
 import { saveCurrentChart, loadCurrentChart } from './utils/localStorageUtils'
 
 const nodeTypes: NodeTypes = {
@@ -88,6 +91,14 @@ function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState<OrgNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({ 
+    levels: [], 
+    departments: [] 
+  });
+  const [availableDepartments, setAvailableDepartments] = useState<string[]>([]);
+  const [filteredOrgData, setFilteredOrgData] = useState<HierarchicalNode | null>(null);
 
   const handleAddNode = useCallback((parentId: string) => {
     const updatedOrgData = addNodeToHierarchy(orgData, parentId);
@@ -152,16 +163,29 @@ function App() {
   );
 
   useEffect(() => {
+    const departments = getAllDepartments(orgData);
+    setAvailableDepartments(departments);
+    
+    const filtered = searchQuery || filterOptions.levels.length > 0 || filterOptions.departments.length > 0
+      ? searchNodes(orgData, searchQuery, filterOptions)
+      : orgData;
+    
+    setFilteredOrgData(filtered);
+    
     const { nodes: initialNodes, edges: initialEdges } = convertToReactFlow(
-      orgData,
+      filtered || orgData, // Use filtered data or fallback to original
       handleEditNode,
       handleDeleteNode,
-      handleAddNode
+      handleAddNode,
+      0, // x position
+      0, // y position
+      0, // level
+      searchQuery // Pass search query for highlighting
     );
     
     setNodes(initialNodes);
     setEdges(initialEdges);
-  }, [orgData, handleEditNode, handleDeleteNode, handleAddNode, setNodes, setEdges]);
+  }, [orgData, searchQuery, filterOptions, handleEditNode, handleDeleteNode, handleAddNode, setNodes, setEdges]);
 
   const onNodeDragStop = useCallback((_event: React.MouseEvent, node: Node) => {
     console.log(`Node ${node.id} moved to position:`, node.position);
@@ -183,8 +207,15 @@ function App() {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>組織図</CardTitle>
           </CardHeader>
-          <CardContent className="h-[600px]">
-            <div ref={reactFlowWrapper} className="w-full h-full">
+          <CardContent>
+            <SearchFilter 
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              filterOptions={filterOptions}
+              onFilterChange={setFilterOptions}
+              availableDepartments={availableDepartments}
+            />
+            <div ref={reactFlowWrapper} className="w-full h-[550px]">
               <ReactFlowProvider>
                 <ReactFlow
                   nodes={nodes}
@@ -201,6 +232,25 @@ function App() {
                   <MiniMap />
                   <Background />
                 </ReactFlow>
+                {nodes.length === 0 && (searchQuery || filterOptions.levels.length > 0 || filterOptions.departments.length > 0) && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-zinc-900/80 z-10">
+                    <Card className="p-4 shadow-lg max-w-md text-center">
+                      <p className="text-lg font-bold">検索結果がありません</p>
+                      <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2">
+                        検索条件を変更するか、フィルターをクリアしてください。
+                      </p>
+                      <Button 
+                        onClick={() => {
+                          setSearchQuery('');
+                          setFilterOptions({ levels: [], departments: [] });
+                        }}
+                        className="mt-4"
+                      >
+                        フィルターをクリア
+                      </Button>
+                    </Card>
+                  </div>
+                )}
               </ReactFlowProvider>
             </div>
           </CardContent>

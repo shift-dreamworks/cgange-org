@@ -15,7 +15,8 @@ export function convertToReactFlow(
   onAdd: (parentId: string) => void,
   x = 0,
   y = 0,
-  level = 0
+  level = 0,
+  searchQuery = ''
 ): { nodes: Node<OrgNodeData>[], edges: Edge[] } {
   const nodes: Node<OrgNodeData>[] = [];
   const edges: Edge[] = [];
@@ -29,6 +30,10 @@ export function convertToReactFlow(
       name: orgData.name,
       title: orgData.title,
       level,
+      matchesSearch: searchQuery ? 
+        (orgData.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+         orgData.title.toLowerCase().includes(searchQuery.toLowerCase())) : 
+        false,
       onEdit,
       onDelete,
       onAdd,
@@ -53,7 +58,8 @@ export function convertToReactFlow(
         onAdd,
         childX,
         childY,
-        level + 1
+        level + 1,
+        searchQuery
       );
       
       edges.push({
@@ -147,4 +153,99 @@ export function updateNodeInHierarchy(
   }
   
   return orgData;
+}
+
+export function extractDepartment(title: string): string {
+  if (!title) return '';
+  
+  const match = title.match(/(.+?)[部課チーム]/);
+  if (match && match[1]) {
+    return match[1] + (title.includes('部') ? '部' : title.includes('課') ? '課' : title.includes('チーム') ? 'チーム' : '');
+  }
+  
+  return title;
+}
+
+export function getAllDepartments(orgData: OrgNode): string[] {
+  const departments = new Set<string>();
+  
+  function traverse(node: OrgNode) {
+    const department = extractDepartment(node.title);
+    if (department) {
+      departments.add(department);
+    }
+    
+    if (node.children && node.children.length > 0) {
+      node.children.forEach(traverse);
+    }
+  }
+  
+  traverse(orgData);
+  return Array.from(departments).filter(Boolean);
+}
+
+export function searchNodes(
+  orgData: OrgNode, 
+  query: string, 
+  filterOptions: { levels: number[], departments: string[] } = { levels: [], departments: [] }
+): OrgNode | null {
+  if (!query && filterOptions.levels.length === 0 && filterOptions.departments.length === 0) {
+    return orgData; // Return unmodified data if no search or filters
+  }
+  
+  const result = JSON.parse(JSON.stringify(orgData)) as OrgNode;
+  
+  const normalizedQuery = query.toLowerCase();
+  
+  const visibleNodeIds = new Set<string>();
+  
+  function identifyMatches(node: OrgNode, level: number = 0): boolean {
+    const matchesSearch = !query || 
+      node.name.toLowerCase().includes(normalizedQuery) || 
+      node.title.toLowerCase().includes(normalizedQuery);
+    
+    const matchesLevel = filterOptions.levels.length === 0 || 
+      filterOptions.levels.includes(Math.min(level, 3));
+    
+    const department = extractDepartment(node.title);
+    const matchesDepartment = filterOptions.departments.length === 0 || 
+      filterOptions.departments.includes(department);
+    
+    let hasMatchingChild = false;
+    if (node.children && node.children.length > 0) {
+      for (const child of node.children) {
+        if (identifyMatches(child, level + 1)) {
+          hasMatchingChild = true;
+        }
+      }
+    }
+    
+    const isVisible = (matchesSearch && matchesLevel && matchesDepartment) || hasMatchingChild;
+    
+    if (isVisible) {
+      visibleNodeIds.add(node.id);
+    }
+    
+    return isVisible;
+  }
+  
+  function filterTree(node: OrgNode): OrgNode | null {
+    if (!visibleNodeIds.has(node.id)) {
+      return null;
+    }
+    
+    const filteredChildren = node.children
+      ? node.children
+          .map(filterTree)
+          .filter((child): child is OrgNode => child !== null)
+      : [];
+    
+    return {
+      ...node,
+      children: filteredChildren
+    };
+  }
+  
+  identifyMatches(result);
+  return filterTree(result);
 }
