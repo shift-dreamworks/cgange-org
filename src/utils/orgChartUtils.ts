@@ -369,7 +369,7 @@ export function addNodeToHierarchy(orgData: OrgNode, parentId: string): OrgNode 
 
 export function deleteNodeFromHierarchy(orgData: OrgNode, nodeId: string): OrgNode | null {
   if (orgData.id === nodeId) {
-    return orgData;
+    return null;
   }
   
   if (orgData.children && orgData.children.length > 0) {
